@@ -11,7 +11,7 @@ def build_messages(question: str, chunks: list[Chunk], history: list[dict] | Non
     """Past turns of the session (memory) followed by the new question with its passages."""
     passages = "\n\n".join(f"Passage {i + 1}:\n{c.text}" for i, c in enumerate(chunks))
     current = {"role": "user", "content": (
-        "Answer the question using only the passages below. Do not use outside knowledge. "
+        "Answer the question using only the passages below and the context provided. Do not use outside knowledge. "
         "Earlier messages of this conversation are given for context. "
         "If the passages do not contain the answer, say so.\n\n"
         f"Question: {question}\n\n{passages}")}

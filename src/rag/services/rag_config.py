@@ -14,10 +14,10 @@ CHAT_PROVIDER = os.environ.get("CHAT_PROVIDER", "ollama")
 # Ollama
 OLLAMA_API_KEY = os.environ.get("OLLAMA_API_KEY", "")
 OLLAMA_LOCAL_HOST = os.environ.get("OLLAMA_LOCAL_HOST", "http://127.0.0.1:11434")
-OLLAMA_CLOUD_HOST = os.environ.get("OLLAMA_CLOUD_HOST", "https://ollama.com")
+OLLAMA_CLOUD_HOST = os.environ.get("OLLAMA_CLOUD_HOST", "http://127.0.0.1:11434")
 EMBED_MODEL = os.environ.get("EMBED_MODEL", "qwen3-embedding")
-CHAT_MODEL = os.environ.get("CHAT_MODEL", "gemma4:31b")
-CHAT_FALLBACK_MODEL = os.environ.get("CHAT_FALLBACK_MODEL", "gemma4:31b")
+CHAT_MODEL = os.environ.get("CHAT_MODEL", "gemma4:e4b")
+CHAT_FALLBACK_MODEL = os.environ.get("CHAT_FALLBACK_MODEL", "gemma4:e4b")
 
 # Storage
 CHROMA_PATH = os.environ.get("CHROMA_PATH", str(BASE_DIR / "data" / "chroma"))
