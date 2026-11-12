@@ -23,7 +23,6 @@ DATABASE_URL = (
     f"mysql+aiomysql://{dbuser}:{dbpassword}@{dbhost}:{dbport}/{dbname}"
     # "?allow_public_key_retrieval=true"
 )
-print(f"DATABASE_URL: {DATABASE_URL}", flush=True)
 
 Base = declarative_base()
 

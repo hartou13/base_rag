@@ -28,6 +28,26 @@ To install and run the project, and to add a module, see [QUICKSTART.md](QUICKST
 
 Interactive API docs are at `/docs` when the server is running.
 
+## Security
+
+The full list is in [FEATURES.md](FEATURES.md). In short:
+
+- **Prompt injection:** a system prompt carries the rules, and the question and every retrieved chunk are wrapped in `<question>` / `<passage>` tags as quoted data. Tags inside the text are neutralised. The question and each chunk go through the same heuristic scan: a flagged question gets a 400, a flagged chunk is dropped. A random canary in the system prompt detects leaks of the prompt in answers.
+- **Signed downloads:** `GET /files/{id}/download` (owner only) returns a URL signed with HMAC over file id, user id and expiry, valid 5 minutes (optionally single-use). `GET /files/{id}/content` accepts a Bearer token or a valid signature. Files are stored under uuid names and the upload folder is never served statically.
+- **Upload validation:** size limit, PDF page limit, type checked by magic bytes, path parts stripped from filenames, encrypted PDFs and PDFs with JavaScript rejected.
+- **Output and logs:** answers are rendered as Markdown only, never raw HTML. Images and links to hosts outside the allowlist are removed. Logs redact secrets, questions and chunks go to a separate rotated audit file, and old log rows are purged.
+
+Required setting: `FILE_URL_SECRET` (32+ characters). The API refuses to start without it. All settings are listed in `.env.example`.
+
+## Tests
+
+```bash
+uv sync --group dev
+pytest tests
+```
+
+The tests cover the pure security code (signed tokens, upload validation, prompt guard, markdown sanitizer, log redaction). They need no database and no Ollama.
+
 ## Roadmap
 
 See [../plan.md](../plan.md) for the proof of concept and the planned improvements (reranking, better chunking, hybrid search).

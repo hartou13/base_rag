@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from src.database.mysql_connector import get_db
 from src.logs.models.log import ActionType, Log, LogTypes
 
@@ -19,6 +19,12 @@ async def create_log_from_exception(user_id: str, exception: Exception, action: 
         await session.commit()
     return log
 
+async def purge_old_logs(retention_days: int) -> int:
+    """Delete audit rows older than the retention period. Returns the number of rows removed."""
+    async with get_db() as session:
+        result = await session.execute(delete(Log).where(Log.created_at < datetime.now() - timedelta(days=retention_days)))
+        return result.rowcount or 0
+
 async def count_login_last_months(user_id: str):
     async with get_db() as session:
         query = select(func.count()).where(Log.user_id == user_id, Log.action == ActionType.LOGIN, Log.created_at > datetime.now() - timedelta(days=30))
@@ -30,8 +36,6 @@ async def count_users_login_last_months():
         query = select(Log.user_id, func.count()).where(Log.action == ActionType.LOGIN, Log.type == LogTypes.INFO, Log.created_at > datetime.now() - timedelta(days=30)).group_by(Log.user_id)
         result = await session.execute(query)
         res = result.fetchall()
-        gen= {user_id: count for user_id, count in res}
-        print(gen)
-        return gen
+        return {user_id: count for user_id, count in res}
     
 

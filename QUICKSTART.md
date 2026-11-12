@@ -73,6 +73,24 @@
 
 - `CHAT_HISTORY_LIMIT` (default `20`): how many past messages of a session are sent to the model on each chat call.
 
+## Security settings
+
+Copy `.env.example` to `.env` and fill it in. `FILE_URL_SECRET` is **required** (generate one with `python -c "import secrets;print(secrets.token_hex(32))"`).
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `FILE_URL_SECRET` | none, required | Key used to sign download URLs (32+ characters) |
+| `FILE_URL_TTL_SECONDS` | `300` | Lifetime of a signed download URL |
+| `FILE_URL_SINGLE_USE` | `false` | A signed URL works only once (per process) |
+| `MAX_UPLOAD_BYTES` | `20971520` | Largest accepted upload (20 MB) |
+| `MAX_PDF_PAGES` | `200` | Largest accepted PDF |
+| `ALLOWED_LINK_DOMAINS` | empty | Comma-separated hosts allowed in answer links and images; empty removes all |
+| `CORS_ORIGINS` | `http://localhost:3000` | Comma-separated origins allowed to call the API from a browser |
+| `LOG_DIR` | `data/logs` | Where `app.log` and `rag_audit.log` are written |
+| `LOG_RETENTION_DAYS` | `30` | How long log files and `logs` table rows are kept |
+
+On the frontend, set `NEXT_PUBLIC_ALLOWED_LINK_DOMAINS` to the same list as `ALLOWED_LINK_DOMAINS`.
+
 ## Adding a module
 
 ```bash

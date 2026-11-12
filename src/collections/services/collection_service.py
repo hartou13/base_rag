@@ -10,7 +10,8 @@ from src.collections.models.collection import Collection
 from src.collections.models.collection_file import CollectionFile
 from src.database.mysql_connector import get_db
 from src.rag.services import rag_config as cfg
-from src.rag.services.rag_ingestion_service import SUPPORTED_EXTENSIONS, ingest_file_service
+from src.collections.services.upload_validation_service import read_limited, validate_upload
+from src.rag.services.rag_ingestion_service import ingest_file_service
 from src.rag.services.vector_store_service import delete_collection_vectors_service, delete_file_vectors_service
 
 
@@ -27,8 +28,8 @@ def _file_to_dto(f: CollectionFile) -> CollectionFileDto:
 
 
 def _stored_path(collection_id: str, file_id: str) -> Path | None:
-    """Uploaded files are stored as {UPLOAD_DIR}/{collection_id}/{file_id}_{filename}."""
-    return next((Path(cfg.UPLOAD_DIR) / collection_id).glob(f"{file_id}_*"), None)
+    """Uploaded files are stored as {UPLOAD_DIR}/{collection_id}/{file_id}{ext} (legacy: {file_id}_{filename})."""
+    return next((Path(cfg.UPLOAD_DIR) / collection_id).glob(f"{file_id}*"), None)
 
 
 async def get_owned_collection_service(collection_id: str, user_id: str) -> Collection:
@@ -119,7 +120,7 @@ async def delete_file_service(file_id: str, user_id: str):
     db_file = await get_owned_file_service(file_id, user_id)
     collection_id = db_file.collection_id
     await delete_file_vectors_service(collection_id, file_id)
-    for path in (Path(cfg.UPLOAD_DIR) / collection_id).glob(f"{file_id}_*"):
+    for path in (Path(cfg.UPLOAD_DIR) / collection_id).glob(f"{file_id}*"):
         path.unlink(missing_ok=True)
     async with get_db() as session:
         await session.execute(delete(CollectionFile).where(CollectionFile.id == file_id))
@@ -157,27 +158,25 @@ async def reindex_file_service(file_id: str, user_id: str) -> CollectionFileDto:
 
 async def add_files_service(collection_id: str, user_id: str, files: list[UploadFile]) -> list[CollectionFileDto]:
     await get_owned_collection_service(collection_id, user_id)
+    # Validate everything before anything is written to disk.
+    validated: list[tuple[str, str, bytes]] = []
     for upload in files:
-        ext = Path(upload.filename or "").suffix.lower()
-        if ext not in SUPPORTED_EXTENSIONS:
-            raise HTTPException(
-                status_code=415,
-                detail=f"Unsupported file type '{ext}'. Supported: {sorted(SUPPORTED_EXTENSIONS)}",
-            )
+        content = await read_limited(upload)
+        safe_name, content_type = validate_upload(upload.filename, content)
+        validated.append((safe_name, content_type, content))
     results = []
-    for upload in files:
+    for safe_name, content_type, content in validated:
         file_id = str(uuid.uuid4())
-        safe_name = Path(upload.filename).name
         folder = Path(cfg.UPLOAD_DIR) / collection_id
         folder.mkdir(parents=True, exist_ok=True)
-        path = folder / f"{file_id}_{safe_name}"
-        content = await upload.read()
+        # uuid name on disk; the original (sanitized) filename lives only in the database
+        path = folder / f"{file_id}{Path(safe_name).suffix.lower()}"
         path.write_bytes(content)
 
         async with get_db() as session:
             session.add(CollectionFile(
                 id=file_id, collection_id=collection_id, filename=safe_name,
-                content_type=upload.content_type, size=len(content), status="indexing",
+                content_type=content_type, size=len(content), status="indexing",
             ))
         results.append(await _index_file(collection_id, file_id, safe_name, path))
     return results
