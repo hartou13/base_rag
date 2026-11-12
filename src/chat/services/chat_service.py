@@ -39,6 +39,7 @@ async def chat_service(data: ChatRequestDto, user_id: str) -> AsyncIterator[str]
         raise HTTPException(status_code=502, detail=str(e))
     sources = [
         {
+            "id": c.id,
             "file_id": c.metadata.get("file_id"),
             "filename": c.metadata.get("filename"),
             "text": c.text,
@@ -59,7 +60,10 @@ async def chat_service(data: ChatRequestDto, user_id: str) -> AsyncIterator[str]
             return
         # Only a completed answer is stored, so history never holds an unanswered question.
         await add_messages_service(
-            session.id, [("user", data.question), ("assistant", "".join(answer_parts))]
+            session.id,
+            [("user", data.question), ("assistant", "".join(answer_parts))],
+            source_ids=[c.id for c in chunks],
+            source_collection_id=collection_id,
         )
         yield _sse({"type": "done"})
 

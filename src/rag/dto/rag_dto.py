@@ -12,3 +12,4 @@ class Chunk:
 class RetrievedChunk(Chunk):
     """A chunk returned by retrieval, with its cosine distance to the question (lower is closer)."""
     distance: float = 0.0
+    id: str = ""  # Chroma id: "{file_id}:{chunk_index}"

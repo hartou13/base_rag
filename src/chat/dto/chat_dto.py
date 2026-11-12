@@ -10,8 +10,9 @@ class ChatRequestDto(BaseModel):
 
 
 class ChatSourceDto(BaseModel):
-    """Shape of each item in the `sources` SSE event."""
+    """Shape of each item in the `sources` SSE event and of a stored message's sources."""
+    id: str
     file_id: Optional[str] = None
     filename: Optional[str] = None
     text: str
-    distance: float
+    distance: Optional[float] = None  # not stored, so absent on reloaded messages

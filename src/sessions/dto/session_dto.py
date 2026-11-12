@@ -3,6 +3,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+from src.chat.dto.chat_dto import ChatSourceDto
+
 
 class CreateSessionDto(BaseModel):
     title: Optional[str] = Field(default=None, max_length=255)
@@ -24,6 +26,7 @@ class MessageDto(BaseModel):
     role: str
     content: str
     created_at: Optional[datetime] = None
+    sources: Optional[List[ChatSourceDto]] = None
 
 
 class SessionDetailDto(SessionDto):

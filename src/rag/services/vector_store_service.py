@@ -41,9 +41,22 @@ def _query_chunks(collection_id: str, embedding: list[float], top_k: int) -> lis
         include=["documents", "metadatas", "distances"],
     )
     return [
-        RetrievedChunk(text=text, metadata=dict(metadata), distance=distance)
-        for text, metadata, distance in zip(result["documents"][0], result["metadatas"][0], result["distances"][0])
+        RetrievedChunk(text=text, metadata=dict(metadata), distance=distance, id=chunk_id)
+        for chunk_id, text, metadata, distance in zip(
+            result["ids"][0], result["documents"][0], result["metadatas"][0], result["distances"][0]
+        )
     ]
+
+
+def _get_chunks_by_ids(collection_id: str, ids: list[str]) -> dict[str, Chunk]:
+    try:
+        result = _get_client().get_collection(collection_id).get(ids=ids, include=["documents", "metadatas"])
+    except Exception:
+        return {}  # collection deleted
+    return {
+        chunk_id: Chunk(text=text, metadata=dict(metadata))
+        for chunk_id, text, metadata in zip(result["ids"], result["documents"], result["metadatas"])
+    }
 
 
 def _delete_collection(collection_id: str):
@@ -66,6 +79,13 @@ async def add_chunks_service(collection_id: str, chunks: list[Chunk], embeddings
 
 async def query_chunks_service(collection_id: str, embedding: list[float], top_k: int) -> list[RetrievedChunk]:
     return await asyncio.to_thread(_query_chunks, collection_id, embedding, top_k)
+
+
+async def get_chunks_by_ids_service(collection_id: str, ids: list[str]) -> dict[str, Chunk]:
+    """id -> Chunk for the ids that still exist (deleted files' chunks are simply absent)."""
+    if not ids:
+        return {}
+    return await asyncio.to_thread(_get_chunks_by_ids, collection_id, ids)
 
 
 async def delete_collection_vectors_service(collection_id: str):

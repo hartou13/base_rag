@@ -3,7 +3,10 @@ import uuid
 from fastapi import HTTPException
 from sqlalchemy import delete, func, select
 
+from src.chat.dto.chat_dto import ChatSourceDto
 from src.database.mysql_connector import get_db
+from src.rag.dto.rag_dto import Chunk
+from src.rag.services.vector_store_service import get_chunks_by_ids_service
 from src.sessions.dto.session_dto import (
     CreateSessionDto,
     MessageDto,
@@ -57,7 +60,31 @@ async def get_session_service(session_id: str, user_id: str) -> SessionDetailDto
         result = await session.execute(
             select(ChatMessage).where(ChatMessage.session_id == session_id).order_by(ChatMessage.created_at, ChatMessage.id)
         )
-        messages = [_message_dto(m) for m in result.scalars().all()]
+        rows = result.scalars().all()
+    # One Chroma lookup per collection for every id cited in the session.
+    ids_by_collection: dict[str, set[str]] = {}
+    for m in rows:
+        if m.source_ids and m.source_collection_id:
+            ids_by_collection.setdefault(m.source_collection_id, set()).update(m.source_ids)
+    chunks: dict[tuple[str, str], Chunk] = {}
+    for collection_id, ids in ids_by_collection.items():
+        found = await get_chunks_by_ids_service(collection_id, sorted(ids))
+        chunks.update({(collection_id, chunk_id): chunk for chunk_id, chunk in found.items()})
+    messages = []
+    for m in rows:
+        dto = _message_dto(m)
+        if m.source_ids and m.source_collection_id:
+            dto.sources = [
+                ChatSourceDto(
+                    id=chunk_id,
+                    file_id=chunks[(m.source_collection_id, chunk_id)].metadata.get("file_id"),
+                    filename=chunks[(m.source_collection_id, chunk_id)].metadata.get("filename"),
+                    text=chunks[(m.source_collection_id, chunk_id)].text,
+                )
+                for chunk_id in m.source_ids
+                if (m.source_collection_id, chunk_id) in chunks
+            ]
+        messages.append(dto)
     return SessionDetailDto(**_to_dto(chat_session).model_dump(), messages=messages)
 
 
@@ -92,11 +119,27 @@ async def get_recent_messages_service(session_id: str, limit: int) -> list[dict]
     return [{"role": m.role, "content": m.content} for m in reversed(rows)]
 
 
-async def add_messages_service(session_id: str, messages: list[tuple[str, str]]):
-    """Appends (role, content) pairs in order and bumps the session's updated_at."""
+async def add_messages_service(
+    session_id: str,
+    messages: list[tuple[str, str]],
+    source_ids: list[str] | None = None,
+    source_collection_id: str | None = None,
+):
+    """Appends (role, content) pairs in order and bumps the session's updated_at.
+    `source_ids` (Chroma chunk ids) are attached to the assistant messages only."""
     async with get_db() as session:
         for role, content in messages:
-            session.add(ChatMessage(id=str(uuid.uuid4()), session_id=session_id, role=role, content=content))
+            is_answer = role == "assistant" and source_ids is not None
+            session.add(
+                ChatMessage(
+                    id=str(uuid.uuid4()),
+                    session_id=session_id,
+                    role=role,
+                    content=content,
+                    source_ids=source_ids if is_answer else None,
+                    source_collection_id=source_collection_id if is_answer else None,
+                )
+            )
             await session.flush()  # separate inserts keep created_at ordered
         await session.execute(
             ChatSession.__table__.update().where(ChatSession.id == session_id).values(updated_at=func.now())
